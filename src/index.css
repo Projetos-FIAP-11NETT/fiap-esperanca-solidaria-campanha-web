@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-body: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+
+  --color-canvas: #fafafc;
+  --color-ink: #0f0e17;
+  --color-muted: #6e6b7e;
+  --color-line: #e4e2ea;
+
+  --color-magenta: #e5017d;
+  --color-indigo: #241f47;
+  --color-paper: #fafafc;
+  --color-goal: #16c79a;
+  --color-danger: #d6455a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --color-canvas: #121018;
+    --color-ink: #f2f0f6;
+    --color-muted: #9b96ac;
+    --color-line: #2c2740;
+  }
+}
+
+:root.dark {
+  --color-canvas: #121018;
+  --color-ink: #f2f0f6;
+  --color-muted: #9b96ac;
+  --color-line: #2c2740;
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
+
+.font-display {
+  font-family: var(--font-display);
+  font-feature-settings: "ss01" 1;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
