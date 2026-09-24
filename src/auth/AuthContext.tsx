@@ -1,53 +1,108 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { logoutSession } from "../api/auth";
+import type { LoginResponse } from "../api/types";
+import { decodeJwtPayload, getJwtExpiry, getJwtRoles } from "../lib/jwt";
+import { isTokenExpired, readStoredSession, SESSION_STORAGE_KEY, type Session } from "./sessionStorage";
 
-interface GestorSession {
-  email: string;
-}
+const GESTOR_ROLE = "GestorONG";
 
 interface AuthContextValue {
-  session: GestorSession | null;
-  login: (email: string) => void;
+  session: Session | null;
+  // Vem da claim "roles" do token — a usuario-api põe GestorONG lá.
+  isGestor: boolean;
+  // true quando a sessão foi derrubada por expiração/rejeição (e não por um
+  // "Sair" do próprio usuário) — as telas usam pra avisar o porquê.
+  sessionExpired: boolean;
+  login: (response: LoginResponse) => Session;
   logout: () => void;
+  expireSession: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-const STORAGE_KEY = "gestor-session";
+// setTimeout estoura acima de 2^31-1 ms (~24 dias) e dispara na hora.
+const MAX_TIMEOUT_MS = 2_147_483_647;
 
-function readSession(): GestorSession | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as GestorSession) : null;
-  } catch {
-    return null;
-  }
+function readInitialState(): { session: Session | null; expired: boolean } {
+  const stored = readStoredSession();
+  if (!stored) return { session: null, expired: false };
+  if (isTokenExpired(stored.idToken)) return { session: null, expired: true };
+  return { session: stored, expired: false };
+}
+
+function buildSession(response: LoginResponse): Session {
+  const claims = decodeJwtPayload(response.idToken);
+  const name = typeof claims?.name === "string" && claims.name.trim() ? claims.name : response.email;
+
+  return { email: response.email, name, idToken: response.idToken, sessionId: response.sessionId };
+}
+
+function hasGestorRole(session: Session | null): boolean {
+  return session !== null && getJwtRoles(session.idToken).includes(GESTOR_ROLE);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<GestorSession | null>(readSession);
+  const [initial] = useState(readInitialState);
+  const [session, setSession] = useState<Session | null>(initial.session);
+  const [sessionExpired, setSessionExpired] = useState(initial.expired);
 
   useEffect(() => {
     try {
       if (session) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
       } else {
-        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(SESSION_STORAGE_KEY);
       }
     } catch {
       // localStorage indisponível (modo privado, etc.) — sessão só dura a aba atual.
     }
   }, [session]);
 
-  return (
-    <AuthContext.Provider
-      value={{
-        session,
-        login: (email) => setSession({ email }),
-        logout: () => setSession(null),
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const expireSession = useCallback(() => {
+    setSession(null);
+    setSessionExpired(true);
+  }, []);
+
+  // Derruba a sessão sozinha no instante em que o token vence, sem esperar o
+  // usuário esbarrar num 403 do gateway.
+  useEffect(() => {
+    const expiry = session ? getJwtExpiry(session.idToken) : null;
+    if (expiry === null) return;
+
+    const timeout = setTimeout(expireSession, Math.min(Math.max(expiry - Date.now(), 0), MAX_TIMEOUT_MS));
+    return () => clearTimeout(timeout);
+  }, [session, expireSession]);
+
+  const login = useCallback((response: LoginResponse) => {
+    const next = buildSession(response);
+    setSession(next);
+    setSessionExpired(false);
+    return next;
+  }, []);
+
+  const logout = useCallback(() => {
+    // Avisa o usuario-api pra invalidar a sessão no cache dele. Melhor esforço:
+    // o usuário sai localmente de qualquer jeito, mesmo se o backend estiver fora.
+    if (session) void logoutSession(session.sessionId, session.idToken).catch(() => {});
+    setSession(null);
+    setSessionExpired(false);
+  }, [session]);
+
+  const isGestor = hasGestorRole(session);
+
+  const value = useMemo(
+    () => ({ session, isGestor, sessionExpired, login, logout, expireSession }),
+    [session, isGestor, sessionExpired, login, logout, expireSession],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
