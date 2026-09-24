@@ -16,6 +16,7 @@
   --color-paper: #fafafc;
   --color-goal: #16c79a;
   --color-danger: #d6455a;
+  --color-warning: #d99a2b;
 }
 
 @media (prefers-color-scheme: dark) {
