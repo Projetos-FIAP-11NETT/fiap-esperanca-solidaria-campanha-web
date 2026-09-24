@@ -7,6 +7,7 @@ export interface Session {
   email: string;
   name: string;
   idToken: string;
+  refreshToken: string;
   sessionId: string;
 }
 

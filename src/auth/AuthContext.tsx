@@ -7,12 +7,15 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { logoutSession } from "../api/auth";
+import { logoutSession, refreshToken as refreshTokenRequest } from "../api/auth";
 import type { LoginResponse } from "../api/types";
 import { decodeJwtPayload, getJwtExpiry, getJwtRoles } from "../lib/jwt";
 import { isTokenExpired, readStoredSession, SESSION_STORAGE_KEY, type Session } from "./sessionStorage";
 
 const GESTOR_ROLE = "GestorONG";
+// Renova o idToken um pouco antes de vencer, nunca exatamente em cima da hora —
+// evita mandar uma requisição com um token que expira no meio do caminho.
+const REFRESH_MARGIN_MS = 60_000;
 
 interface AuthContextValue {
   session: Session | null;
@@ -30,18 +33,28 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 // setTimeout estoura acima de 2^31-1 ms (~24 dias) e dispara na hora.
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
-function readInitialState(): { session: Session | null; expired: boolean } {
+// Se o idToken guardado já venceu, isso não quer dizer que a sessão acabou — o
+// servidor mantém ela viva por 1h (SessionLifetime.Duration, renovada a cada
+// refresh) independente do idToken. `staleSession` carrega o refreshToken pra
+// AuthProvider tentar recuperar a sessão em vez de já desistir.
+function readInitialState(): { session: Session | null; expired: boolean; staleSession: Session | null } {
   const stored = readStoredSession();
-  if (!stored) return { session: null, expired: false };
-  if (isTokenExpired(stored.idToken)) return { session: null, expired: true };
-  return { session: stored, expired: false };
+  if (!stored) return { session: null, expired: false, staleSession: null };
+  if (isTokenExpired(stored.idToken)) return { session: null, expired: true, staleSession: stored };
+  return { session: stored, expired: false, staleSession: null };
 }
 
 function buildSession(response: LoginResponse): Session {
   const claims = decodeJwtPayload(response.idToken);
   const name = typeof claims?.name === "string" && claims.name.trim() ? claims.name : response.email;
 
-  return { email: response.email, name, idToken: response.idToken, sessionId: response.sessionId };
+  return {
+    email: response.email,
+    name,
+    idToken: response.idToken,
+    refreshToken: response.refreshToken,
+    sessionId: response.sessionId,
+  };
 }
 
 function hasGestorRole(session: Session | null): boolean {
@@ -70,22 +83,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSessionExpired(true);
   }, []);
 
-  // Derruba a sessão sozinha no instante em que o token vence, sem esperar o
-  // usuário esbarrar num 403 do gateway.
-  useEffect(() => {
-    const expiry = session ? getJwtExpiry(session.idToken) : null;
-    if (expiry === null) return;
-
-    const timeout = setTimeout(expireSession, Math.min(Math.max(expiry - Date.now(), 0), MAX_TIMEOUT_MS));
-    return () => clearTimeout(timeout);
-  }, [session, expireSession]);
-
   const login = useCallback((response: LoginResponse) => {
     const next = buildSession(response);
     setSession(next);
     setSessionExpired(false);
     return next;
   }, []);
+
+  // Ao abrir o app com um idToken guardado já vencido, tenta recuperar a sessão
+  // com o refreshToken antes de desistir — o servidor pode muito bem ainda estar
+  // com ela viva (ver readInitialState). Roda uma vez só, no primeiro render.
+  useEffect(() => {
+    const stale = initial.staleSession;
+    if (!stale) return;
+
+    let cancelled = false;
+    refreshTokenRequest(stale.sessionId, stale.refreshToken)
+      .then((response) => {
+        if (!cancelled) login(response);
+      })
+      .catch(() => {
+        // Já começa como expirado (initial.expired) — nada a fazer aqui.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Renova o idToken um pouco antes de vencer, em vez de só derrubar a sessão —
+  // cada renovação também estende a sessão no servidor por mais 1h, então o
+  // usuário só é deslogado de verdade se ficar 1h sem usar o app.
+  useEffect(() => {
+    if (!session) return;
+
+    const expiry = getJwtExpiry(session.idToken);
+    if (expiry === null) return;
+
+    const delay = Math.min(Math.max(expiry - Date.now() - REFRESH_MARGIN_MS, 0), MAX_TIMEOUT_MS);
+
+    const timeout = setTimeout(() => {
+      refreshTokenRequest(session.sessionId, session.refreshToken)
+        .then((response) => login(response))
+        .catch(() => expireSession());
+    }, delay);
+
+    return () => clearTimeout(timeout);
+  }, [session, login, expireSession]);
 
   const logout = useCallback(() => {
     // Avisa o usuario-api pra invalidar a sessão no cache dele. Melhor esforço:
