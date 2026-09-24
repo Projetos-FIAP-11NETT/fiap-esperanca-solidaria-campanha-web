@@ -1,12 +1,18 @@
 import { apiGet, apiPost, apiPut, apiUpload } from "./client";
+import { gatewayGet } from "./gatewayClient";
 import type { CampaignFormPayload, CampaignResponse, PublicCampaignResponse } from "./types";
 
+// Leitura pública passa pelo API Gateway (ver fiap-esperanca-solidaria-infra
+// terraform/k8s/main.tf) — as rotas GET de /api/v1/campanhas(/{id}) não
+// exigem auth. CRUD de gestor continua direto no campanha-api: o gateway
+// ainda não tem rota nenhuma pra listagem admin, cancelamento ou upload de
+// imagem. Essas chamadas levam o Bearer do login (papel GestorONG no token).
 export function listPublicCampaigns(title?: string) {
-  return apiGet<PublicCampaignResponse[]>("/api/v1/Campaign/public", { title });
+  return gatewayGet<PublicCampaignResponse[]>("/api/v1/campanhas", { title });
 }
 
 export function getCampaignById(id: string) {
-  return apiGet<CampaignResponse>(`/api/v1/Campaign/${id}`);
+  return gatewayGet<CampaignResponse>(`/api/v1/campanhas/${id}`);
 }
 
 export function listCampaigns() {

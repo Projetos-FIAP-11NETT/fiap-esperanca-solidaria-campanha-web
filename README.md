@@ -18,9 +18,9 @@ Front-end do painel de transparência e da área do gestor do MVP "Conexão Soli
 ```
 src/
   api/            client HTTP tipado (client.ts, campaigns.ts, types.ts)
-  auth/           AuthContext (sessão local) + RequireGestor (guarda de rota)
+  auth/           AuthContext (sessão única, papéis vindos do JWT) + RequireGestor (guarda de rota)
   components/     Header, Footer, CampaignCard, StatusBadge, ThemeToggle, etc.
-  pages/          Home, CampaignDetail, Login, ManagerHome, ManagerCampaignForm
+  pages/          Home, CampaignDetail, DoadorEntrar/Cadastro/Perfil, ManagerHome, ManagerCampaignForm
   lib/format.ts   formatação de moeda/data em pt-BR
 ```
 
@@ -30,18 +30,17 @@ src/
 |---|---|---|
 | `/` | Público | Painel de transparência — campanhas ativas, busca por título |
 | `/campanhas/:id` | Público | Detalhe de uma campanha |
-| `/login` | Público | Login do gestor (ver nota abaixo) |
+| `/entrar` | Público | Login único (doador e gestor). `/login` redireciona pra cá |
 | `/gestor` | Gestor | Lista todas as campanhas (qualquer status), criar/editar/cancelar |
 | `/gestor/nova` | Gestor | Criar campanha (com upload de imagem de capa) |
 | `/gestor/campanhas/:id/editar` | Gestor | Editar campanha |
 
-> **Login do gestor**: o `usuario-api` (emissor do JWT real via Firebase) ainda
-> não existe. Em desenvolvimento, `/login` aceita qualquer e-mail e guarda uma
-> sessão local (`localStorage`) só pra liberar as telas de gestor — as
-> chamadas autenticadas usam o dev bypass que o próprio `campanha-api` expõe
-> (`X-Dev-Role`/`X-Dev-User`, ver `AuthConfig.cs`/`DevAuthHandler.cs` no
-> backend), nunca disponível fora de `Development`. Nada aqui é autenticação
-> de verdade — é um estado provisório documentado, não uma feature escondida.
+> **Login e gestor**: há um login só (`/entrar`, via `usuario-api`/Firebase). O papel
+> vem na claim `roles` do `idToken`; quem tem `GestorONG` vê o link "Área do gestor" e
+> acessa `/gestor/*`. As chamadas autenticadas ao `campanha-api` mandam
+> `Authorization: Bearer <idToken>` (ver `auth/sessionStorage.ts`). Pra promover uma conta:
+> `PUT /users/api/v1/User/MakeGestorONG` (via gateway) — depois é preciso sair e entrar de
+> novo, porque a claim só entra no token novo.
 
 ## Rodando localmente
 

@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { createCampaign, getCampaignById, updateCampaign, uploadCampaignImage } from "../api/campaigns";
 import { ApiError } from "../api/client";
 import { PageWidth } from "../components/PageWidth";
+import type { CampaignResponse } from "../api/types";
 
 function toDateInput(isoDate: string) {
   return isoDate.slice(0, 10);
@@ -13,14 +14,21 @@ export function ManagerCampaignForm() {
   const { id } = useParams<{ id: string }>();
   const isEditing = Boolean(id);
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  // Veio de "Duplicar" (ManagerCampaignRow, campanha concluída/cancelada): pré-preenche
+  // texto/meta/imagem, mas não datas nem status — o gestor define um novo período.
+  const duplicateFrom = !isEditing
+    ? ((location.state as { duplicateFrom?: CampaignResponse } | null)?.duplicateFrom ?? null)
+    : null;
+
+  const [title, setTitle] = useState(duplicateFrom ? `${duplicateFrom.title} (cópia)` : "");
+  const [description, setDescription] = useState(duplicateFrom?.description ?? "");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [financialGoal, setFinancialGoal] = useState("");
-  const [image, setImage] = useState("");
+  const [financialGoal, setFinancialGoal] = useState(duplicateFrom ? String(duplicateFrom.financialGoal) : "");
+  const [image, setImage] = useState(duplicateFrom?.image ?? "");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,8 +107,13 @@ export function ManagerCampaignForm() {
         </Link>
 
         <h1 className="font-display mt-4 text-2xl text-ink sm:text-3xl">
-          {isEditing ? "Editar campanha" : "Nova campanha"}
+          {isEditing ? "Editar campanha" : duplicateFrom ? "Duplicar campanha" : "Nova campanha"}
         </h1>
+        {duplicateFrom && (
+          <p className="mt-1 text-sm text-muted">
+            Copiado de "{duplicateFrom.title}". Defina um novo período antes de criar.
+          </p>
+        )}
 
         <form className="mt-8 flex flex-col gap-4" onSubmit={handleSubmit}>
           <label className="flex flex-col gap-1 text-sm text-ink">

@@ -1,12 +1,15 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { RequireGestor } from "./auth/RequireGestor";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
 import { CampaignDetail } from "./pages/CampaignDetail";
+import { DoadorCadastro } from "./pages/DoadorCadastro";
+import { DoadorEntrar } from "./pages/DoadorEntrar";
+import { DoadorPerfil } from "./pages/DoadorPerfil";
 import { Home } from "./pages/Home";
-import { Login } from "./pages/Login";
 import { ManagerCampaignForm } from "./pages/ManagerCampaignForm";
 import { ManagerHome } from "./pages/ManagerHome";
+import { NotFound } from "./pages/NotFound";
 
 export function App() {
   return (
@@ -16,7 +19,10 @@ export function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/campanhas/:id" element={<CampaignDetail />} />
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<Navigate to="/entrar" replace />} />
+          <Route path="/entrar" element={<DoadorEntrar />} />
+          <Route path="/cadastro" element={<DoadorCadastro />} />
+          <Route path="/perfil" element={<DoadorPerfil />} />
           <Route
             path="/gestor"
             element={
@@ -41,6 +47,7 @@ export function App() {
               </RequireGestor>
             }
           />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
       <Footer />
