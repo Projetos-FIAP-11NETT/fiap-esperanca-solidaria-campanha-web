@@ -8,11 +8,22 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const BASE_URL: string | undefined = import.meta.env.VITE_GATEWAY_BASE_URL;
 
 // O gateway (authorizer) responde {"Message": "..."} com M maiúsculo; os
-// backends respondem {"message": "..."}.
+// backends respondem {"message": "..."}, {"error": "..."} ou ProblemDetails
+// ({"title", "errors": {campo: [mensagens]}}) nos erros de validação.
 function extractMessage(body: unknown, fallback: string): string {
   if (!body || typeof body !== "object") return fallback;
+  const parsed = body as { error?: unknown; title?: unknown; errors?: Record<string, string[]> };
+
+  if (parsed.errors && typeof parsed.errors === "object") {
+    const messages = Object.values(parsed.errors).flat();
+    if (messages.length > 0) return messages.join(" ");
+  }
+
   const entry = Object.entries(body).find(([key]) => key.toLowerCase() === "message");
-  return typeof entry?.[1] === "string" && entry[1] ? entry[1] : fallback;
+  if (typeof entry?.[1] === "string" && entry[1]) return entry[1];
+  if (typeof parsed.error === "string" && parsed.error) return parsed.error;
+  if (typeof parsed.title === "string" && parsed.title) return parsed.title;
+  return fallback;
 }
 
 async function handle<T>(response: Response, path: string): Promise<T> {
@@ -71,12 +82,16 @@ async function request<T>(
 
 // Sem Content-Type manual: o navegador define o multipart/form-data com o
 // boundary certo sozinho a partir do FormData.
-export async function gatewayUpload<T>(path: string, formData: FormData): Promise<T> {
+export async function gatewayUpload<T>(
+  path: string,
+  formData: FormData,
+  headers?: Record<string, string>,
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(buildUrl(path), {
       method: "POST",
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", ...headers },
       body: formData,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -97,6 +112,9 @@ export const gatewayGet = <T>(
 
 export const gatewayPost = <T>(path: string, body?: unknown, headers?: Record<string, string>) =>
   request<T>("POST", path, { body, headers });
+
+export const gatewayPut = <T>(path: string, body?: unknown, headers?: Record<string, string>) =>
+  request<T>("PUT", path, { body, headers });
 
 export const gatewayDelete = <T>(path: string, headers?: Record<string, string>) =>
   request<T>("DELETE", path, { headers });
