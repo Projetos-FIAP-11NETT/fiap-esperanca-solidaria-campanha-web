@@ -20,7 +20,6 @@ para criar, editar e cancelar campanhas.
 - [Rodando localmente](#rodando-localmente)
 - [Scripts](#scripts)
 - [Troubleshooting](#troubleshooting)
-- [Pendências](#pendências)
 
 ---
 
@@ -181,12 +180,4 @@ Se o LocalStack reiniciar com o dev server aberto: reaplique o Terraform da infr
 | Login ok, mas doar dá "sem permissão" | Conta sem papel `Doador` na claim `roles` (ex.: usuário antigo/seed). Crie uma conta nova pelo `/cadastro`. |
 | Área do gestor dá 403 | Conta sem `GestorONG` na claim `roles`, ou promovida há pouco (saia e entre de novo). |
 | Chamadas protegidas travam/500 | Port-forward `4566` do LocalStack fechado (o authorizer não consegue rodar). |
-| Doação com Boleto fica "Pendente" | O `doacao-work` não tem taxa de aprovação para Boleto (ver pendências). |
-
----
-
-## Pendências
-
-- O formulário de doação oferece **Boleto**, mas o `doacao-work` não tem `Payments:ApprovalRate:Boleto`,
-  então essas doações nunca saem de `Pending`.
-- Deploy num host estático ainda não configurado.
+| Doação com Boleto fica "Pendente" | O `doacao-work` não tem taxa de aprovação configurada para Boleto. |
