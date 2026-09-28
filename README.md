@@ -44,18 +44,19 @@ para criar, editar e cancelar campanhas.
                          ┌────────────────────────────────────────────────────────────┐
   gatewayClient.ts ────▶ │ API Gateway (LocalStack :30466)                            │
   (VITE_GATEWAY_BASE_URL)│   /users/api/v1/User/*   → usuario-api                     │
-                         │   /api/v1/campanhas*     → campanha-api (leitura pública)  │
+                         │   /api/v1/campanhas*     → campanha-api (público + gestor) │
                          │   /api/v1/doacoes*       → campanha-api (Doador)           │
                          └────────────────────────────────────────────────────────────┘
-  client.ts ───────────▶ campanha-api direto (:30081 no k8s / :5054 local) — CRUD do gestor
-  (VITE_API_BASE_URL)
 ```
+
+**Todas** as chamadas passam pelo gateway: o front só conhece uma URL base e o Lambda authorizer valida
+o papel (`Doador`/`GestorONG`) em toda rota protegida. As APIs não precisam ser expostas ao navegador.
 
 | Módulo | Cliente | Chamadas |
 |---|---|---|
 | `src/api/auth.ts` | gateway | cadastro (`User/Doador`), upload de foto (`User/images`), login, refresh, logout |
-| `src/api/campaigns.ts` | gateway | `listPublicCampaigns`, `getCampaignById` |
-| `src/api/campaigns.ts` | **direto** | `listCampaigns`, `createCampaign`, `updateCampaign`, `cancelCampaign`, `uploadCampaignImage` |
+| `src/api/campaigns.ts` | gateway (público) | `listPublicCampaigns`, `getCampaignById` |
+| `src/api/campaigns.ts` | gateway (GestorONG) | `listCampaigns` (`/campanhas/gestao`), `createCampaign`, `updateCampaign`, `cancelCampaign`, `uploadCampaignImage` (`/campanhas/images`, multipart) |
 | `src/api/donations.ts` | gateway | `donate`, `getMyDonations` |
 
 O id da REST API do gateway muda a cada restart do LocalStack; o script `scripts/sync-gateway-env.mjs`
@@ -72,8 +73,8 @@ LocalStack não responder, só avisa.
 ├── scripts/sync-gateway-env.mjs   # Descobre o id do API Gateway e grava no .env.development
 ├── src/
 │   ├── api/
-│   │   ├── gatewayClient.ts       # fetch para o API Gateway (timeout, mensagens de erro do authorizer)
-│   │   ├── client.ts              # fetch direto ao campanha-api + ApiError e regras 401/403
+│   │   ├── gatewayClient.ts       # único cliente HTTP: fetch para o API Gateway (timeout, mensagens de erro)
+│   │   ├── client.ts              # ApiError e regras 401/403 (isSessionRejected, isPermissionDenied)
 │   │   ├── auth.ts, campaigns.ts, donations.ts   # Funções por domínio
 │   │   └── types.ts               # Tipos das respostas das APIs
 │   ├── auth/
@@ -134,13 +135,11 @@ Copie `.env.example` para `.env.development` (arquivo ignorado pelo git):
 | Variável | Descrição | Exemplo |
 |---|---|---|
 | `VITE_GATEWAY_BASE_URL` | Base do API Gateway (preenchida pelo `gateway:sync`) | `http://localhost:30466/restapis/<id>/dev/_user_request_` |
-| `VITE_API_BASE_URL` | `campanha-api` direto (CRUD do gestor) | `http://localhost:30081` (k8s) ou `http://localhost:5054` (dotnet run) |
 
 Variáveis opcionais do script de sincronização: `GATEWAY_HOST` (padrão `http://localhost:30466`),
 `GATEWAY_API_NAME` (padrão `local-api-gateway-v1`) e `GATEWAY_STAGE` (padrão `dev`).
 
-A origem `http://localhost:5173` precisa estar liberada no CORS das APIs chamadas diretamente
-(`Cors:AllowedOrigins`).
+O preflight CORS (`OPTIONS`) das chamadas do navegador é respondido pelo próprio API Gateway.
 
 ---
 
@@ -151,7 +150,7 @@ e o `kubectl port-forward` do LocalStack aberto para o authorizer).
 
 ```bash
 npm install
-cp .env.example .env.development   # ajuste VITE_API_BASE_URL se necessário
+cp .env.example .env.development   # opcional: o gateway:sync já cria/atualiza o arquivo
 npm run dev                        # roda o gateway:sync e sobe em http://localhost:5173
 ```
 
@@ -180,7 +179,7 @@ Se o LocalStack reiniciar com o dev server aberto: reaplique o Terraform da infr
 | "VITE_GATEWAY_BASE_URL não definida" | LocalStack fora do ar ou Terraform não aplicado. Suba-os e rode `npm run gateway:sync`. |
 | Tudo retorna 404 / `NoSuchBucket` | O id do gateway mudou. `npm run gateway:sync` e reinicie o dev server. |
 | Login ok, mas doar dá "sem permissão" | Conta sem papel `Doador` na claim `roles` (ex.: usuário antigo/seed). Crie uma conta nova pelo `/cadastro`. |
-| Área do gestor dá erro de CORS | O `campanha-api` chamado direto precisa liberar `http://localhost:5173` em `Cors:AllowedOrigins`. |
+| Área do gestor dá 403 | Conta sem `GestorONG` na claim `roles`, ou promovida há pouco (saia e entre de novo). |
 | Chamadas protegidas travam/500 | Port-forward `4566` do LocalStack fechado (o authorizer não consegue rodar). |
 | Doação com Boleto fica "Pendente" | O `doacao-work` não tem taxa de aprovação para Boleto (ver pendências). |
 
@@ -188,9 +187,6 @@ Se o LocalStack reiniciar com o dev server aberto: reaplique o Terraform da infr
 
 ## Pendências
 
-- O CRUD de campanhas do gestor ainda chama o `campanha-api` direto; as rotas equivalentes
-  (`/api/v1/campanhas/gestao`, `POST/PUT /api/v1/campanhas`, `/images`, `/{id}/cancel`) já existem no
-  gateway e podem substituir o `client.ts`.
 - O formulário de doação oferece **Boleto**, mas o `doacao-work` não tem `Payments:ApprovalRate:Boleto`,
   então essas doações nunca saem de `Pending`.
 - Deploy num host estático ainda não configurado.
