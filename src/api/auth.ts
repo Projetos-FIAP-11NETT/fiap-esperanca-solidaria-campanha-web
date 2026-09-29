@@ -1,3 +1,4 @@
+import { storedAuthHeaders } from "../auth/sessionStorage";
 import { gatewayDelete, gatewayPost, gatewayUpload } from "./gatewayClient";
 import type { LoginPayload, LoginResponse, SignupPayload, UploadUserImageResponse } from "./types";
 
@@ -5,6 +6,13 @@ import type { LoginPayload, LoginResponse, SignupPayload, UploadUserImageRespons
 // doador do de gestor, que exige estar logado como GestorONG: ver UserController).
 export function signup(payload: SignupPayload) {
   return gatewayPost<void>("/users/api/v1/User/Doador", payload);
+}
+
+// POST /User/GestorONG: só um GestorONG logado cadastra outro gestor (rota CUSTOM no
+// gateway, o authorizer nega qualquer outro papel). A conta nova já nasce com a role
+// GestorONG; quem cadastra continua logado com a própria sessão.
+export function createGestor(payload: SignupPayload) {
+  return gatewayPost<void>("/users/api/v1/User/GestorONG", payload, storedAuthHeaders());
 }
 
 // Anônimo de propósito (ver UserController.UploadImageAsync na usuario-api): no
