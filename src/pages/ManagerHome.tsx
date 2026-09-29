@@ -36,12 +36,20 @@ export function ManagerHome() {
           <h1 className="font-display text-2xl text-ink sm:text-3xl">Painel do gestor</h1>
           <p className="mt-1 text-sm text-muted">Logado como {session?.email}</p>
         </div>
-        <Link
-          to="/gestor/nova"
-          className="rounded-full bg-magenta px-4 py-2.5 text-sm text-paper transition-opacity hover:opacity-90"
-        >
-          Nova campanha
-        </Link>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            to="/gestor/gestores/novo"
+            className="rounded-full border border-line px-4 py-2.5 text-sm text-ink transition-colors hover:border-magenta hover:text-magenta"
+          >
+            Novo gestor
+          </Link>
+          <Link
+            to="/gestor/nova"
+            className="rounded-full bg-magenta px-4 py-2.5 text-sm text-paper transition-opacity hover:opacity-90"
+          >
+            Nova campanha
+          </Link>
+        </div>
       </div>
 
       {error && <p className="mt-6 text-sm text-danger">{error}</p>}

@@ -53,7 +53,7 @@ o papel (`Doador`/`GestorONG`) em toda rota protegida. As APIs não precisam ser
 
 | Módulo | Cliente | Chamadas |
 |---|---|---|
-| `src/api/auth.ts` | gateway | cadastro (`User/Doador`), upload de foto (`User/images`), login, refresh, logout |
+| `src/api/auth.ts` | gateway | cadastro de doador (`User/Doador`) e de gestor (`User/GestorONG`, só GestorONG), upload de foto (`User/images`), login, refresh, logout |
 | `src/api/campaigns.ts` | gateway (público) | `listPublicCampaigns`, `getCampaignById` |
 | `src/api/campaigns.ts` | gateway (GestorONG) | `listCampaigns` (`/campanhas/gestao`), `createCampaign`, `updateCampaign`, `cancelCampaign`, `uploadCampaignImage` (`/campanhas/images`, multipart) |
 | `src/api/donations.ts` | gateway | `donate`, `getMyDonations` |
@@ -104,6 +104,7 @@ LocalStack não responder, só avisa.
 | `/gestor` | GestorONG | Todas as campanhas (qualquer status), com ações de editar/cancelar |
 | `/gestor/nova` | GestorONG | Criar campanha, com upload de imagem de capa |
 | `/gestor/campanhas/:id/editar` | GestorONG | Editar campanha |
+| `/gestor/gestores/novo` | GestorONG | Cadastrar outro gestor (a conta nasce com papel GestorONG; quem cadastra continua logado) |
 | `*` | — | Página 404 |
 
 ---
