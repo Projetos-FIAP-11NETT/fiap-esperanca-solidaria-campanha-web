@@ -8,6 +8,7 @@ import { DoadorEntrar } from "./pages/DoadorEntrar";
 import { DoadorPerfil } from "./pages/DoadorPerfil";
 import { Home } from "./pages/Home";
 import { ManagerCampaignForm } from "./pages/ManagerCampaignForm";
+import { ManagerGestorCadastro } from "./pages/ManagerGestorCadastro";
 import { ManagerHome } from "./pages/ManagerHome";
 import { NotFound } from "./pages/NotFound";
 
@@ -44,6 +45,14 @@ export function App() {
             element={
               <RequireGestor>
                 <ManagerCampaignForm />
+              </RequireGestor>
+            }
+          />
+          <Route
+            path="/gestor/gestores/novo"
+            element={
+              <RequireGestor>
+                <ManagerGestorCadastro />
               </RequireGestor>
             }
           />

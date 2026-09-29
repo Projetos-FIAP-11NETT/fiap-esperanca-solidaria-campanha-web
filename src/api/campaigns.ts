@@ -1,12 +1,11 @@
-import { apiGet, apiPost, apiPut, apiUpload } from "./client";
-import { gatewayGet } from "./gatewayClient";
+import { storedAuthHeaders } from "../auth/sessionStorage";
+import { gatewayGet, gatewayPost, gatewayPut, gatewayUpload } from "./gatewayClient";
 import type { CampaignFormPayload, CampaignResponse, PublicCampaignResponse } from "./types";
 
-// Leitura pública passa pelo API Gateway (ver fiap-esperanca-solidaria-infra
-// terraform/k8s/main.tf) — as rotas GET de /api/v1/campanhas(/{id}) não
-// exigem auth. CRUD de gestor continua direto no campanha-api: o gateway
-// ainda não tem rota nenhuma pra listagem admin, cancelamento ou upload de
-// imagem. Essas chamadas levam o Bearer do login (papel GestorONG no token).
+// Tudo passa pelo API Gateway (ver fiap-esperanca-solidaria-infra
+// terraform/k8s/main.tf). As leituras públicas (GET /api/v1/campanhas e
+// /{id}) são authorization=NONE; o CRUD do gestor é CUSTOM — o Lambda
+// authorizer exige o papel GestorONG no Bearer do login.
 export function listPublicCampaigns(title?: string) {
   return gatewayGet<PublicCampaignResponse[]>("/api/v1/campanhas", { title });
 }
@@ -16,23 +15,23 @@ export function getCampaignById(id: string) {
 }
 
 export function listCampaigns() {
-  return apiGet<CampaignResponse[]>("/api/v1/Campaign");
+  return gatewayGet<CampaignResponse[]>("/api/v1/campanhas/gestao", undefined, storedAuthHeaders());
 }
 
 export function createCampaign(payload: CampaignFormPayload) {
-  return apiPost<CampaignResponse>("/api/v1/Campaign", payload);
+  return gatewayPost<CampaignResponse>("/api/v1/campanhas", payload, storedAuthHeaders());
 }
 
 export function updateCampaign(id: string, payload: CampaignFormPayload) {
-  return apiPut<CampaignResponse>(`/api/v1/Campaign/${id}`, payload);
+  return gatewayPut<CampaignResponse>(`/api/v1/campanhas/${id}`, payload, storedAuthHeaders());
 }
 
 export function cancelCampaign(id: string) {
-  return apiPost<CampaignResponse>(`/api/v1/Campaign/${id}/cancel`);
+  return gatewayPost<CampaignResponse>(`/api/v1/campanhas/${id}/cancel`, undefined, storedAuthHeaders());
 }
 
 export function uploadCampaignImage(file: File) {
   const formData = new FormData();
   formData.append("file", file);
-  return apiUpload<{ url: string }>("/api/v1/Campaign/images", formData);
+  return gatewayUpload<{ url: string }>("/api/v1/campanhas/images", formData, storedAuthHeaders());
 }
